@@ -2,6 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 import random
 from datetime import datetime
+import pytz  # Add timezone support
 
 # Configure page
 st.set_page_config(
@@ -36,10 +37,17 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize Gemini-Pro
-GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"] if "GOOGLE_API_KEY" in st.secrets else "YOUR_API_KEY"
-genai.configure(api_key=GOOGLE_API_KEY)
-model = genai.GenerativeModel('gemini-pro')
+# Initialize Gemini-Pro with better error handling
+try:
+    GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
+    if not GOOGLE_API_KEY or GOOGLE_API_KEY == "YOUR_API_KEY":
+        st.error("Please set your Google API key in Streamlit secrets.")
+        st.stop()
+    genai.configure(api_key=GOOGLE_API_KEY)
+    model = genai.GenerativeModel('gemini-pro')
+except Exception as e:
+    st.error("Error initializing the AI model. Please check your API key configuration.")
+    st.stop()
 
 # Daily quotes
 quotes = [
@@ -104,17 +112,18 @@ if user_input:
         User message: {user_input}"""
         
         response = model.generate_content(prompt)
-        bot_message = response.text
-        
-        # Add bot response to chat history
-        st.session_state.messages.append({"role": "assistant", "content": bot_message})
+        if response.text:
+            bot_message = response.text
+            # Add bot response to chat history
+            st.session_state.messages.append({"role": "assistant", "content": bot_message})
+        else:
+            st.error("I received an empty response. Please try again.")
         
         # Rerun to update the chat display
         st.rerun()
         
     except Exception as e:
-        st.error("I'm sorry, I'm having trouble responding right now. Please try again.")
-        print(f"Error: {e}")
+        st.error(f"I'm sorry, I couldn't process your request. Error: {str(e)}")
 
 # Sidebar with additional features
 with st.sidebar:
@@ -130,6 +139,8 @@ with st.sidebar:
         st.session_state.messages = []
         st.rerun()
     
-    # Display current time
+    # Display current time with timezone
     st.markdown("---")
-    st.markdown(f"Current time: {datetime.now().strftime('%I:%M %p')}")
+    india_tz = pytz.timezone('Asia/Kolkata')
+    current_time = datetime.now(india_tz)
+    st.markdown(f"Current time: {current_time.strftime('%I:%M %p IST')}")
